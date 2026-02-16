@@ -4,94 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NYETAK - Steganography Tool</title>
-    
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        /* Konfigurasi Visual Sesuai PRD */
-        body { 
-            font-family: 'JetBrains Mono', monospace; 
-            background-color: #000000; /* PRD 2.1 */
-            color: #d4d4d4;
-            margin: 0;
-            overflow-x: hidden;
-        }
-        .bento-card {
-            background-color: rgba(23, 23, 23, 0.8); /* PRD 2.2 */
-            border: 1px solid #262626;
-        }
-        .lime-accent { color: #84cc16; } /* PRD 2.1 */
-        .bg-lime-accent { background-color: #84cc16; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #84cc16; }
+        body { font-family: 'JetBrains Mono', monospace; background-color: #000000; color: #d4d4d4; }
+        .bento-card { background-color: #171717; border: 1px solid #262626; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // Inisialisasi Icon (PRD 3.1 & 3.2)
-        const { 
-            Zap, Unlock, Cpu, Upload, Image: ImageIcon, 
-            FileText, ChevronRight, AlertTriangle, CheckCircle 
-        } = window.lucide || {};
-
-        const STEG_MARKER = "EOFSTEG1"; // PRD 5
+        const { Zap, Unlock, Cpu, Upload, Image: ImageIcon, ChevronRight } = window.lucide;
+        const STEG_MARKER = "EOFSTEG1";
 
         const App = () => {
-            const [activeTab, setActiveTab] = React.useState('embed'); // PRD 2.2
-            const [status, setStatus] = React.useState('ONLINE');
+            const [activeTab, setActiveTab] = React.useState('embed');
             const [isProcessing, setIsProcessing] = React.useState(false);
             const [error, setError] = React.useState(null);
-
-            // State Embed (PRD 3.1)
             const [embedCover, setEmbedCover] = React.useState(null);
-            const [secretType, setSecretType] = React.useState('text');
             const [secretText, setSecretText] = React.useState('');
-            const [secretFile, setSecretFile] = React.useState(null);
             const [embedResult, setEmbedResult] = React.useState(null);
-
-            // State Extract (PRD 3.2)
             const [extractSource, setExtractSource] = React.useState(null);
             const [extractResult, setExtractResult] = React.useState(null);
 
             const coverRef = React.useRef();
-            const secretRef = React.useRef();
             const extractRef = React.useRef();
 
-            // Logika Penyisipan (PRD 3.1.C)
             const handleEmbed = async () => {
                 setError(null);
                 try {
-                    if (!embedCover) throw new Error("Missing cover image."); [cite: 105]
+                    if (!embedCover) throw new Error("Missing cover image.");
+                    if (!secretText.trim()) throw new Error("Secret message is empty.");
+                    
                     setIsProcessing(true);
-
                     const coverBuf = new Uint8Array(await embedCover.arrayBuffer());
-                    let secretBuf, filename, mime;
-
-                    if (secretType === 'text') {
-                        if (!secretText.trim()) throw new Error("Secret message is empty."); [cite: 107]
-                        secretBuf = new TextEncoder().encode(secretText);
-                        filename = "secret_message.txt";
-                        mime = "text/plain";
-                    } else {
-                        if (!secretFile) throw new Error("Missing secret file."); [cite: 106]
-                        secretBuf = new Uint8Array(await secretFile.arrayBuffer());
-                        filename = secretFile.name;
-                        mime = secretFile.type;
-                    }
-
-                    const metadata = { imageSize: coverBuf.length, secretFilename: filename, mimeType: mime, timestamp: new Date().toISOString() }; [cite: 66, 72]
+                    const secretBuf = new TextEncoder().encode(secretText);
+                    const metadata = { 
+                        imageSize: coverBuf.length, 
+                        secretFilename: "secret_message.txt", 
+                        mimeType: "text/plain", 
+                        timestamp: new Date().toISOString() 
+                    };
                     const metaBuf = new TextEncoder().encode(JSON.stringify(metadata));
                     const markerBuf = new TextEncoder().encode(STEG_MARKER);
 
-                    const final = new Uint8Array(coverBuf.length + secretBuf.length + metaBuf.length + markerBuf.length); [cite: 73]
+                    const final = new Uint8Array(coverBuf.length + secretBuf.length + metaBuf.length + markerBuf.length);
                     final.set(coverBuf, 0);
                     final.set(secretBuf, coverBuf.length);
                     final.set(metaBuf, coverBuf.length + secretBuf.length);
@@ -99,155 +61,111 @@
 
                     setEmbedResult({
                         url: URL.createObjectURL(new Blob([final], { type: embedCover.type })),
-                        name: `NYETAK_${embedCover.name}` [cite: 78]
+                        name: "NYETAK_" + embedCover.name
                     });
-                } catch (e) { setError(e.message); } finally { setIsProcessing(false); }
+                } catch (e) { 
+                    setError(e.message); 
+                } finally { 
+                    setIsProcessing(false); 
+                }
             };
 
-            // Logika Ekstraksi (PRD 3.2.C)
             const handleExtract = async () => {
                 setError(null);
                 try {
-                    if (!extractSource) throw new Error("No source file selected."); [cite: 108]
+                    if (!extractSource) throw new Error("No source file selected.");
                     setIsProcessing(true);
                     const buf = new Uint8Array(await extractSource.arrayBuffer());
                     const decoder = new TextDecoder();
 
-                    if (decoder.decode(buf.slice(-STEG_MARKER.length)) !== STEG_MARKER) throw new Error("Invalid marker. EOFSTEG1 missing."); [cite: 88, 109]
+                    if (decoder.decode(buf.slice(-STEG_MARKER.length)) !== STEG_MARKER) {
+                        throw new Error("Invalid marker. EOFSTEG1 missing.");
+                    }
 
                     let meta = null;
-                    for (let i = buf.length - STEG_MARKER.length - 1; i > buf.length - 5120; i--) { [cite: 89]
+                    const scanLimit = Math.min(buf.length, 5120);
+                    for (let i = buf.length - STEG_MARKER.length - 1; i > buf.length - scanLimit; i--) {
                         if (buf[i] === 123) {
                             try {
                                 const p = JSON.parse(decoder.decode(buf.slice(i, buf.length - STEG_MARKER.length)));
                                 if (p.imageSize) { meta = p; break; }
-                            } catch {}
+                            } catch (e) {}
                         }
                     }
 
-                    if (!meta) throw new Error("Metadata segment not found."); [cite: 110]
+                    if (!meta) throw new Error("Metadata segment not found.");
                     const secretData = buf.slice(meta.imageSize, buf.length - STEG_MARKER.length - JSON.stringify(meta).length);
 
                     setExtractResult({
-                        original: URL.createObjectURL(new Blob([buf.slice(0, meta.imageSize)], { type: extractSource.type })),
                         secret: URL.createObjectURL(new Blob([secretData], { type: meta.mimeType })),
                         filename: meta.secretFilename,
-                        preview: meta.mimeType.startsWith('text/') ? decoder.decode(secretData).slice(0, 2000) : null
+                        preview: decoder.decode(secretData).slice(0, 2000)
                     });
-                } catch (e) { setError(e.message); } finally { setIsProcessing(false); }
+                } catch (e) { 
+                    setError(e.message); 
+                } finally { 
+                    setIsProcessing(false); 
+                }
             };
 
             return (
-                <div className="min-h-screen p-4 md:p-10 relative">
-                    <div className="fixed top-0 right-0 w-80 h-80 bg-[#84cc16]/5 blur-[100px] -z-10" />
-                    
-                    <div className="max-w-6xl mx-auto space-y-6">
-                        {/* Header (PRD 2.2.A) */}
+                <div className="min-h-screen p-6 md:p-12">
+                    <div className="max-w-5xl mx-auto space-y-6">
                         <header className="p-6 bento-card border-l-4 border-[#84cc16] flex justify-between items-center">
                             <div>
-                                <h1 className="text-3xl font-bold tracking-tighter lime-accent">NYETAK <span className="text-neutral-600">// steganography</span></h1>
-                                <p className="text-[10px] text-neutral-500 tracking-[0.3em] uppercase mt-1">Secure Data Embedding Protocol</p>
+                                <h1 className="text-3xl font-bold tracking-tighter text-[#84cc16]">NYETAK</h1>
+                                <p className="text-[10px] text-neutral-500 tracking-[0.3em] uppercase">Secure Data Embedding Protocol</p>
                             </div>
-                            <Cpu className="w-10 h-10 text-neutral-800 hidden md:block" />
+                            <Cpu className="w-10 h-10 text-neutral-800" />
                         </header>
 
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                            {/* Sidebar (PRD 2.2.B) */}
-                            <aside className="md:col-span-3 space-y-4">
-                                <div className="flex flex-col gap-2">
-                                    <button onClick={() => setActiveTab('embed')} className={`p-4 text-left border transition-all ${activeTab === 'embed' ? 'border-[#84cc16] bg-[#84cc16]/5 text-white' : 'border-neutral-800 opacity-60'}`}>
-                                        <div className="flex items-center gap-2 font-bold text-xs"><Zap className="w-4 h-4 lime-accent"/> EMBED</div>
-                                        <span className="text-[9px]">Sembunyikan Data</span>
-                                    </button>
-                                    <button onClick={() => setActiveTab('extract')} className={`p-4 text-left border transition-all ${activeTab === 'extract' ? 'border-[#84cc16] bg-[#84cc16]/5 text-white' : 'border-neutral-800 opacity-60'}`}>
-                                        <div className="flex items-center gap-2 font-bold text-xs"><Unlock className="w-4 h-4 lime-accent"/> EXTRACT</div>
-                                        <span className="text-[9px]">Buka Data</span>
-                                    </button>
-                                </div>
-                                <div className="p-4 bento-card text-[9px] font-mono space-y-1">
-                                    <p className="lime-accent">&gt; SYSTEM: {status}</p>
-                                    <p className="text-neutral-600">&gt; METHOD: EOF APPEND</p>
-                                    <p className={isProcessing ? "animate-pulse" : ""}>&gt; {isProcessing ? "PROCESSING..." : "IDLE"}</p>
-                                </div>
-                            </aside>
+                        <div className="grid md:grid-cols-4 gap-6">
+                            <nav className="flex flex-col gap-2">
+                                <button onClick={() => setActiveTab('embed')} className={"p-4 text-left border " + (activeTab === 'embed' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
+                                    <Zap className="w-4 h-4 inline mr-2 text-[#84cc16]"/> EMBED
+                                </button>
+                                <button onClick={() => setActiveTab('extract')} className={"p-4 text-left border " + (activeTab === 'extract' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
+                                    <Unlock className="w-4 h-4 inline mr-2 text-[#84cc16]"/> EXTRACT
+                                </button>
+                            </nav>
 
-                            {/* Main Workspace (PRD 2.2.C) */}
-                            <main className="md:col-span-9 bento-card p-8 min-h-[500px] relative">
-                                {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-900/50 text-red-400 text-[10px] font-mono">&gt; ERROR: {error}</div>}
-
+                            <main className="md:col-span-3 bento-card p-8 min-h-[400px]">
+                                {error && <div className="mb-4 text-red-500 text-xs font-bold uppercase">&gt; ERROR: {error}</div>}
+                                
                                 {activeTab === 'embed' ? (
-                                    <div className="space-y-8 animate-in fade-in">
-                                        <div className="grid md:grid-cols-2 gap-8">
-                                            <div className="space-y-4">
-                                                <label className="text-[10px] text-neutral-500 uppercase font-bold">Cover Image</label>
-                                                <div onClick={() => coverRef.current.click()} className="border-2 border-dashed border-neutral-800 h-40 flex flex-col items-center justify-center cursor-pointer hover:border-neutral-600 transition-all">
-                                                    <input type="file" className="hidden" ref={coverRef} onChange={e => setEmbedCover(e.target.files[0])} accept="image/*" />
-                                                    {embedCover ? <span className="lime-accent text-xs font-bold">{embedCover.name}</span> : <Upload className="w-8 h-8 text-neutral-800" />}
-                                                </div>
-                                                <div className="flex p-1 bg-black border border-neutral-800 text-[9px] font-bold">
-                                                    <button onClick={() => setSecretType('text')} className={`flex-1 py-2 ${secretType === 'text' ? 'bg-neutral-800 lime-accent' : ''}`}>TEXT</button>
-                                                    <button onClick={() => setSecretType('file')} className={`flex-1 py-2 ${secretType === 'file' ? 'bg-neutral-800 lime-accent' : ''}`}>FILE</button>
-                                                </div>
-                                                {secretType === 'text' ? 
-                                                    <textarea value={secretText} onChange={e => setSecretText(e.target.value)} placeholder="Tulis pesan rahasia..." className="w-full h-32 bg-black border border-neutral-800 p-3 text-xs outline-none focus:border-[#84cc16]" /> :
-                                                    <div onClick={() => secretRef.current.click()} className="p-4 border border-neutral-800 bg-black cursor-pointer flex justify-between items-center">
-                                                        <input type="file" className="hidden" ref={secretRef} onChange={e => setSecretFile(e.target.files[0])} />
-                                                        <span className="text-[10px]">{secretFile ? secretFile.name : "Pilih file rahasia"}</span>
-                                                        <ChevronRight className="w-4 h-4" />
-                                                    </div>
-                                                }
-                                            </div>
-                                            <div className="flex flex-col justify-end">
-                                                <button onClick={handleEmbed} disabled={isProcessing} className="w-full py-4 bg-lime-accent text-black font-bold text-xs uppercase tracking-widest hover:bg-[#a3e635] transition-all">
-                                                    {isProcessing ? "Processing..." : "Execute Protocol"}
-                                                </button>
-                                            </div>
+                                    <div className="space-y-6">
+                                        <div onClick={() => coverRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer">
+                                            <input type="file" className="hidden" ref={coverRef} onChange={e => setEmbedCover(e.target.files[0])} />
+                                            {embedCover ? <span className="text-[#84cc16] text-xs">{embedCover.name}</span> : <Upload className="text-neutral-700" />}
                                         </div>
-                                        {embedResult && (
-                                            <div className="p-6 border border-[#84cc16]/30 bg-[#84cc16]/5 flex justify-between items-center animate-in slide-in-from-bottom">
-                                                <div><p className="text-xs font-bold text-white uppercase">Proses Berhasil</p><p className="text-[9px] text-neutral-500">File siap diunduh</p></div>
-                                                <a href={embedResult.url} download={embedResult.name} className="px-6 py-2 bg-white text-black text-[10px] font-bold hover:bg-[#84cc16] transition-all">DOWNLOAD</a>
-                                            </div>
-                                        )}
+                                        <textarea value={secretText} onChange={e => setSecretText(e.target.value)} placeholder="Tulis pesan rahasia..." className="w-full h-24 bg-black border border-neutral-800 p-3 text-xs outline-none" />
+                                        <button onClick={handleEmbed} className="w-full py-4 bg-[#84cc16] text-black font-bold text-xs uppercase">Run Protocol</button>
+                                        {embedResult && <a href={embedResult.url} download={embedResult.name} className="block text-center p-3 bg-white text-black font-bold text-xs">DOWNLOAD RESULT</a>}
                                     </div>
                                 ) : (
-                                    <div className="space-y-8 animate-in fade-in">
-                                        <div onClick={() => extractRef.current.click()} className="border-2 border-dashed border-neutral-800 h-64 flex flex-col items-center justify-center cursor-pointer hover:border-neutral-600 transition-all">
+                                    <div className="space-y-6">
+                                        <div onClick={() => extractRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer">
                                             <input type="file" className="hidden" ref={extractRef} onChange={e => setExtractSource(e.target.files[0])} />
-                                            {extractSource ? <span className="lime-accent text-xs font-bold">{extractSource.name}</span> : <div className="text-center"><Upload className="w-10 h-10 text-neutral-800 mx-auto mb-2"/><p className="text-[10px] text-neutral-500 uppercase">Drop Stego Image Here</p></div>}
+                                            {extractSource ? <span className="text-[#84cc16] text-xs">{extractSource.name}</span> : <Upload className="text-neutral-700" />}
                                         </div>
-                                        <button onClick={handleExtract} disabled={!extractSource || isProcessing} className="w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest hover:bg-[#84cc16] transition-all">
-                                            {isProcessing ? "Extracting..." : "Decrypt & Extract"}
-                                        </button>
+                                        <button onClick={handleExtract} className="w-full py-4 bg-white text-black font-bold text-xs uppercase">Decrypt & Extract</button>
                                         {extractResult && (
-                                            <div className="grid md:grid-cols-2 gap-6 animate-in slide-in-from-bottom">
-                                                <div className="bg-black border border-neutral-800 p-4 h-48 flex flex-col justify-between">
-                                                    <div className="overflow-y-auto custom-scrollbar">
-                                                        <p className="text-[10px] lime-accent font-bold mb-2">SECRET CONTENT:</p>
-                                                        <p className="text-xs text-neutral-400 whitespace-pre-wrap font-mono leading-relaxed">{extractResult.preview || "Binary file detected."}</p>
-                                                    </div>
-                                                    <a href={extractResult.secret} download={extractResult.filename} className="mt-4 py-2 border border-neutral-800 text-[9px] text-center font-bold text-neutral-500 hover:text-white uppercase">Download Secret</a>
-                                                </div>
-                                                <div className="bg-neutral-900 border border-neutral-800 p-4 h-48 flex flex-col justify-between">
-                                                    <pre className="text-[8px] lime-accent/60 overflow-hidden">HIDDEN_METADATA_DETECTED: {extractResult.filename}</pre>
-                                                    <a href={extractResult.original} download={`clean_${extractSource.name}`} className="py-2 bg-neutral-800 text-neutral-500 text-[9px] text-center font-bold hover:text-white uppercase">Download Clean Image</a>
-                                                </div>
+                                            <div className="p-4 bg-black border border-neutral-800">
+                                                <p className="text-[#84cc16] text-[10px] font-bold mb-2">CONTENT DETECTED:</p>
+                                                <p className="text-xs text-neutral-400 mb-4">{extractResult.preview}</p>
+                                                <a href={extractResult.secret} download={extractResult.filename} className="text-[10px] underline uppercase">Download Secret File</a>
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </main>
                         </div>
-                        <footer className="text-center py-10 text-[9px] text-neutral-700 font-mono tracking-[0.5em]">
-                            &copy; 2026 NYETAK PROTOCOL // SECURED BY BENTO CLIENT ENGINE [cite: 5]
-                        </footer>
                     </div>
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
