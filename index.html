@@ -8,40 +8,38 @@
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'JetBrains Mono', monospace; background-color: #000000; color: #d4d4d4; }
         .bento-card { background-color: #171717; border: 1px solid #262626; }
+        .lime-accent { color: #84cc16; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { Zap, Unlock, Cpu, Upload, Image: ImageIcon, ChevronRight } = window.lucide;
-        const STEG_MARKER = "EOFSTEG1";
+        const STEG_MARKER = "EOFSTEG1"; // Sesuai batasan teknis PRD [cite: 115]
 
         const App = () => {
             const [activeTab, setActiveTab] = React.useState('embed');
-            const [isProcessing, setIsProcessing] = React.useState(false);
-            const [error, setError] = React.useState(null);
             const [embedCover, setEmbedCover] = React.useState(null);
             const [secretText, setSecretText] = React.useState('');
             const [embedResult, setEmbedResult] = React.useState(null);
             const [extractSource, setExtractSource] = React.useState(null);
             const [extractResult, setExtractResult] = React.useState(null);
+            const [error, setError] = React.useState(null);
 
             const coverRef = React.useRef();
             const extractRef = React.useRef();
 
+            // Logika Embed (PRD 3.1) [cite: 48]
             const handleEmbed = async () => {
                 setError(null);
                 try {
-                    if (!embedCover) throw new Error("Missing cover image.");
-                    if (!secretText.trim()) throw new Error("Secret message is empty.");
+                    if (!embedCover) throw new Error("Missing cover image."); // [cite: 105]
+                    if (!secretText.trim()) throw new Error("Secret message is empty."); // [cite: 107]
                     
-                    setIsProcessing(true);
                     const coverBuf = new Uint8Array(await embedCover.arrayBuffer());
                     const secretBuf = new TextEncoder().encode(secretText);
                     const metadata = { 
@@ -61,31 +59,26 @@
 
                     setEmbedResult({
                         url: URL.createObjectURL(new Blob([final], { type: embedCover.type })),
-                        name: "NYETAK_" + embedCover.name
+                        name: "NYETAK_" + embedCover.name // [cite: 78]
                     });
-                } catch (e) { 
-                    setError(e.message); 
-                } finally { 
-                    setIsProcessing(false); 
-                }
+                } catch (e) { setError(e.message); }
             };
 
+            // Logika Extract (PRD 3.2) [cite: 79]
             const handleExtract = async () => {
                 setError(null);
                 try {
-                    if (!extractSource) throw new Error("No source file selected.");
-                    setIsProcessing(true);
+                    if (!extractSource) throw new Error("No source file selected."); // [cite: 108]
                     const buf = new Uint8Array(await extractSource.arrayBuffer());
                     const decoder = new TextDecoder();
 
                     if (decoder.decode(buf.slice(-STEG_MARKER.length)) !== STEG_MARKER) {
-                        throw new Error("Invalid marker. EOFSTEG1 missing.");
+                        throw new Error("Invalid marker. EOFSTEG1 missing."); // [cite: 109]
                     }
 
                     let meta = null;
-                    const scanLimit = Math.min(buf.length, 5120);
-                    for (let i = buf.length - STEG_MARKER.length - 1; i > buf.length - scanLimit; i--) {
-                        if (buf[i] === 123) {
+                    for (let i = buf.length - STEG_MARKER.length - 1; i > buf.length - 5120; i--) {
+                        if (buf[i] === 123) { // [cite: 89]
                             try {
                                 const p = JSON.parse(decoder.decode(buf.slice(i, buf.length - STEG_MARKER.length)));
                                 if (p.imageSize) { meta = p; break; }
@@ -93,67 +86,63 @@
                         }
                     }
 
-                    if (!meta) throw new Error("Metadata segment not found.");
+                    if (!meta) throw new Error("Metadata segment not found."); // [cite: 110]
                     const secretData = buf.slice(meta.imageSize, buf.length - STEG_MARKER.length - JSON.stringify(meta).length);
 
                     setExtractResult({
                         secret: URL.createObjectURL(new Blob([secretData], { type: meta.mimeType })),
                         filename: meta.secretFilename,
-                        preview: decoder.decode(secretData).slice(0, 2000)
+                        preview: decoder.decode(secretData).slice(0, 2000) // [cite: 96]
                     });
-                } catch (e) { 
-                    setError(e.message); 
-                } finally { 
-                    setIsProcessing(false); 
-                }
+                } catch (e) { setError(e.message); }
             };
 
             return (
                 <div className="min-h-screen p-6 md:p-12">
                     <div className="max-w-5xl mx-auto space-y-6">
+                        {/* Header Bento Style [cite: 23, 24] */}
                         <header className="p-6 bento-card border-l-4 border-[#84cc16] flex justify-between items-center">
                             <div>
                                 <h1 className="text-3xl font-bold tracking-tighter text-[#84cc16]">NYETAK</h1>
-                                <p className="text-[10px] text-neutral-500 tracking-[0.3em] uppercase">Secure Data Embedding Protocol</p>
+                                <p className="text-[10px] text-neutral-500 tracking-[0.3em] uppercase">SECURE DATA EMBEDDING PROTOCOL</p>
                             </div>
-                            <Cpu className="w-10 h-10 text-neutral-800" />
                         </header>
 
                         <div className="grid md:grid-cols-4 gap-6">
                             <nav className="flex flex-col gap-2">
-                                <button onClick={() => setActiveTab('embed')} className={"p-4 text-left border " + (activeTab === 'embed' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
-                                    <Zap className="w-4 h-4 inline mr-2 text-[#84cc16]"/> EMBED
+                                <button onClick={() => setActiveTab('embed')} className={"p-4 text-left border text-xs font-bold " + (activeTab === 'embed' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
+                                    EMBED - Sembunyikan Data
                                 </button>
-                                <button onClick={() => setActiveTab('extract')} className={"p-4 text-left border " + (activeTab === 'extract' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
-                                    <Unlock className="w-4 h-4 inline mr-2 text-[#84cc16]"/> EXTRACT
+                                <button onClick={() => setActiveTab('extract')} className={"p-4 text-left border text-xs font-bold " + (activeTab === 'extract' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
+                                    EXTRACT - Buka Data
                                 </button>
                             </nav>
 
                             <main className="md:col-span-3 bento-card p-8 min-h-[400px]">
-                                {error && <div className="mb-4 text-red-500 text-xs font-bold uppercase">&gt; ERROR: {error}</div>}
+                                {error && <div className="mb-4 text-red-500 text-xs font-bold font-mono">&gt; ERROR: {error}</div>}
                                 
                                 {activeTab === 'embed' ? (
                                     <div className="space-y-6">
-                                        <div onClick={() => coverRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer">
-                                            <input type="file" className="hidden" ref={coverRef} onChange={e => setEmbedCover(e.target.files[0])} />
-                                            {embedCover ? <span className="text-[#84cc16] text-xs">{embedCover.name}</span> : <Upload className="text-neutral-700" />}
+                                        <div onClick={() => coverRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer hover:border-[#84cc16] transition-all">
+                                            <input type="file" className="hidden" ref={coverRef} onChange={e => setEmbedCover(e.target.files[0])} accept="image/*" />
+                                            {embedCover ? <span className="text-[#84cc16] text-xs font-bold">{embedCover.name}</span> : <span className="text-neutral-700 text-xs font-bold">PILIH COVER IMAGE</span>}
                                         </div>
-                                        <textarea value={secretText} onChange={e => setSecretText(e.target.value)} placeholder="Tulis pesan rahasia..." className="w-full h-24 bg-black border border-neutral-800 p-3 text-xs outline-none" />
-                                        <button onClick={handleEmbed} className="w-full py-4 bg-[#84cc16] text-black font-bold text-xs uppercase">Run Protocol</button>
-                                        {embedResult && <a href={embedResult.url} download={embedResult.name} className="block text-center p-3 bg-white text-black font-bold text-xs">DOWNLOAD RESULT</a>}
+                                        <textarea value={secretText} onChange={e => setSecretText(e.target.value)} placeholder="Tulis pesan rahasia di sini..." className="w-full h-24 bg-black border border-neutral-800 p-3 text-xs outline-none focus:border-[#84cc16]" />
+                                        <button onClick={handleEmbed} className="w-full py-4 bg-[#84cc16] text-black font-bold text-xs uppercase tracking-widest hover:bg-[#a3e635]">Execute Embed</button>
+                                        {embedResult && <a href={embedResult.url} download={embedResult.name} className="block text-center p-3 bg-white text-black font-bold text-xs mt-4">DOWNLOAD RESULT</a>}
                                     </div>
                                 ) : (
                                     <div className="space-y-6">
-                                        <div onClick={() => extractRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer">
+                                        <div onClick={() => extractRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer hover:border-[#84cc16] transition-all">
                                             <input type="file" className="hidden" ref={extractRef} onChange={e => setExtractSource(e.target.files[0])} />
-                                            {extractSource ? <span className="text-[#84cc16] text-xs">{extractSource.name}</span> : <Upload className="text-neutral-700" />}
+                                            {extractSource ? <span className="text-[#84cc16] text-xs font-bold">{extractSource.name}</span> : <span className="text-neutral-700 text-xs font-bold">PILIH STEGO IMAGE</span>}
                                         </div>
-                                        <button onClick={handleExtract} className="w-full py-4 bg-white text-black font-bold text-xs uppercase">Decrypt & Extract</button>
+                                        <button onClick={handleExtract} className="w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest hover:bg-[#84cc16]">Extract & Decrypt</button>
                                         {extractResult && (
-                                            <div className="p-4 bg-black border border-neutral-800">
-                                                <p className="text-[#84cc16] text-[10px] font-bold mb-2">CONTENT DETECTED:</p>
-                                                <p className="text-xs text-neutral-400 mb-4">{extractResult.preview}</p>
-                                                <a href={extractResult.secret} download={extractResult.filename} className="text-[10px] underline uppercase">Download Secret File</a>
+                                            <div className="p-4 bg-black border border-neutral-800 mt-6">
+                                                <p className="text-[#84cc16] text-[10px] font-bold mb-2 uppercase tracking-widest">Secret Found:</p>
+                                                <p className="text-xs text-neutral-400 mb-4 font-mono leading-relaxed">{extractResult.preview}</p>
+                                                <a href={extractResult.secret} download={extractResult.filename} className="text-[10px] font-bold underline uppercase text-white">Download Hidden File</a>
                                             </div>
                                         )}
                                     </div>
@@ -165,7 +154,8 @@
             );
         };
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
