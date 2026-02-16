@@ -9,31 +9,67 @@
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'JetBrains Mono', monospace; background-color: #000000; color: #d4d4d4; }
-        .bento-card { background-color: #171717; border: 1px solid #262626; }
-        .lime-accent { color: #84cc16; }
+        /* [cite: 16, 17, 18, 19] */
+        body { 
+            font-family: 'JetBrains Mono', monospace; 
+            background-color: #000000; 
+            color: #d4d4d4; 
+            overflow-x: hidden;
+        }
+        /* [cite: 18, 45] */
+        .bento-card { 
+            background-color: rgba(23, 23, 23, 0.8); 
+            border: 1px solid #262626; 
+            backdrop-filter: blur(10px);
+        }
+        /*  */
+        .ambient-glow {
+            position: fixed;
+            top: -10%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(132, 204, 22, 0.15) 0%, rgba(0,0,0,0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .lime-text { color: #84cc16; }
+        .lime-border { border-color: #84cc16; }
+        .lime-bg { background-color: #84cc16; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #000; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #84cc16; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    <div class="ambient-glow"></div>
 
     <script type="text/babel">
-        const STEG_MARKER = "EOFSTEG1"; // Sesuai batasan teknis PRD [cite: 115]
+        const STEG_MARKER = "EOFSTEG1"; // [cite: 115]
 
         const App = () => {
             const [activeTab, setActiveTab] = React.useState('embed');
+            const [status, setStatus] = React.useState('ONLINE');
+            const [error, setError] = React.useState(null);
+            
+            // Embed States
             const [embedCover, setEmbedCover] = React.useState(null);
             const [secretText, setSecretText] = React.useState('');
             const [embedResult, setEmbedResult] = React.useState(null);
+
+            // Extract States
             const [extractSource, setExtractSource] = React.useState(null);
             const [extractResult, setExtractResult] = React.useState(null);
-            const [error, setError] = React.useState(null);
 
             const coverRef = React.useRef();
             const extractRef = React.useRef();
 
-            // Logika Embed (PRD 3.1) [cite: 48]
+            // [cite: 63]
             const handleEmbed = async () => {
                 setError(null);
                 try {
@@ -42,6 +78,8 @@
                     
                     const coverBuf = new Uint8Array(await embedCover.arrayBuffer());
                     const secretBuf = new TextEncoder().encode(secretText);
+                    
+                    // Generate Metadata JSON [cite: 66]
                     const metadata = { 
                         imageSize: coverBuf.length, 
                         secretFilename: "secret_message.txt", 
@@ -51,6 +89,7 @@
                     const metaBuf = new TextEncoder().encode(JSON.stringify(metadata));
                     const markerBuf = new TextEncoder().encode(STEG_MARKER);
 
+                    // Combined binary [cite: 73]
                     const final = new Uint8Array(coverBuf.length + secretBuf.length + metaBuf.length + markerBuf.length);
                     final.set(coverBuf, 0);
                     final.set(secretBuf, coverBuf.length);
@@ -64,7 +103,7 @@
                 } catch (e) { setError(e.message); }
             };
 
-            // Logika Extract (PRD 3.2) [cite: 79]
+            // [cite: 87]
             const handleExtract = async () => {
                 setError(null);
                 try {
@@ -72,13 +111,15 @@
                     const buf = new Uint8Array(await extractSource.arrayBuffer());
                     const decoder = new TextDecoder();
 
+                    // Check Marker [cite: 88]
                     if (decoder.decode(buf.slice(-STEG_MARKER.length)) !== STEG_MARKER) {
-                        throw new Error("Invalid marker. EOFSTEG1 missing."); // [cite: 109]
+                        throw new Error("Invalid or corrupted file signature."); // [cite: 109]
                     }
 
+                    // Scan backwards for Metadata [cite: 89]
                     let meta = null;
                     for (let i = buf.length - STEG_MARKER.length - 1; i > buf.length - 5120; i--) {
-                        if (buf[i] === 123) { // [cite: 89]
+                        if (buf[i] === 123) { 
                             try {
                                 const p = JSON.parse(decoder.decode(buf.slice(i, buf.length - STEG_MARKER.length)));
                                 if (p.imageSize) { meta = p; break; }
@@ -92,63 +133,224 @@
                     setExtractResult({
                         secret: URL.createObjectURL(new Blob([secretData], { type: meta.mimeType })),
                         filename: meta.secretFilename,
-                        preview: decoder.decode(secretData).slice(0, 2000) // [cite: 96]
+                        preview: decoder.decode(secretData).slice(0, 2000), // [cite: 96]
+                        rawMeta: meta
                     });
                 } catch (e) { setError(e.message); }
             };
 
             return (
-                <div className="min-h-screen p-6 md:p-12">
-                    <div className="max-w-5xl mx-auto space-y-6">
-                        {/* Header Bento Style [cite: 23, 24] */}
-                        <header className="p-6 bento-card border-l-4 border-[#84cc16] flex justify-between items-center">
+                <div className="min-h-screen p-4 md:p-12 selection:bg-[#84cc16] selection:text-black">
+                    <div className="max-w-6xl mx-auto space-y-8">
+                        
+                        {/* HEADER [cite: 24, 27, 29, 30] */}
+                        <header className="p-8 bento-card border-l-8 border-[#84cc16] flex justify-between items-center transition-all hover:shadow-[0_0_20px_rgba(132,204,22,0.1)]">
                             <div>
-                                <h1 className="text-3xl font-bold tracking-tighter text-[#84cc16]">NYETAK</h1>
-                                <p className="text-[10px] text-neutral-500 tracking-[0.3em] uppercase">SECURE DATA EMBEDDING PROTOCOL</p>
+                                <h1 className="text-4xl font-black tracking-tighter lime-text italic">NYETAK</h1>
+                                <p className="text-[10px] text-neutral-500 tracking-[0.4em] uppercase font-bold mt-2">
+                                    SECURE DATA EMBEDDING PROTOCOL
+                                </p>
+                            </div>
+                            <div className="text-neutral-800 font-black text-6xl hidden md:block select-none opacity-20">
+                                //STG
                             </div>
                         </header>
 
-                        <div className="grid md:grid-cols-4 gap-6">
-                            <nav className="flex flex-col gap-2">
-                                <button onClick={() => setActiveTab('embed')} className={"p-4 text-left border text-xs font-bold " + (activeTab === 'embed' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
-                                    EMBED - Sembunyikan Data
+                        {/* BENTO GRID SYSTEM  */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                            
+                            {/* SIDEBAR NAVIGATION [cite: 32, 33, 41, 42] */}
+                            <nav className="md:col-span-3 space-y-4">
+                                <button 
+                                    onClick={() => setActiveTab('embed')} 
+                                    className={`w-full p-6 text-left border-2 transition-all font-bold tracking-widest flex flex-col gap-1 ${activeTab === 'embed' ? 'lime-border bg-[#84cc16]/5 text-white shadow-[0_0_15px_rgba(132,204,22,0.1)]' : 'border-neutral-900 text-neutral-600 hover:border-neutral-700'}`}
+                                >
+                                    <span className="text-xs">EMBED</span>
+                                    <span className="text-[9px] opacity-50 uppercase">Sembunyikan Data</span>
                                 </button>
-                                <button onClick={() => setActiveTab('extract')} className={"p-4 text-left border text-xs font-bold " + (activeTab === 'extract' ? "border-[#84cc16] bg-[#84cc16]/5" : "border-neutral-800")}>
-                                    EXTRACT - Buka Data
+                                
+                                <button 
+                                    onClick={() => setActiveTab('extract')} 
+                                    className={`w-full p-6 text-left border-2 transition-all font-bold tracking-widest flex flex-col gap-1 ${activeTab === 'extract' ? 'lime-border bg-[#84cc16]/5 text-white shadow-[0_0_15px_rgba(132,204,22,0.1)]' : 'border-neutral-900 text-neutral-600 hover:border-neutral-700'}`}
+                                >
+                                    <span className="text-xs">EXTRACT</span>
+                                    <span className="text-[9px] opacity-50 uppercase">Buka Data</span>
                                 </button>
+
+                                <div className="p-4 bento-card text-[9px] space-y-2 font-mono opacity-60">
+                                    <p className="lime-text">&gt; SYSTEM: {status}</p>
+                                    <p>&gt; METHOD: EOF_APPEND</p>
+                                    <p className="animate-pulse">&gt; WAITING_INPUT...</p>
+                                </div>
                             </nav>
 
-                            <main className="md:col-span-3 bento-card p-8 min-h-[400px]">
-                                {error && <div className="mb-4 text-red-500 text-xs font-bold font-mono">&gt; ERROR: {error}</div>}
+                            {/* WORKSPACE AREA [cite: 43, 44, 45, 46] */}
+                            <main className="md:col-span-9 bento-card p-10 min-h-[550px] relative overflow-hidden">
+                                {error && (
+                                    <div className="mb-6 p-4 bg-red-900/20 border-l-4 border-red-500 text-red-400 text-[10px] font-mono uppercase tracking-tighter">
+                                        &gt; ERROR: {error}
+                                    </div>
+                                )}
                                 
                                 {activeTab === 'embed' ? (
-                                    <div className="space-y-6">
-                                        <div onClick={() => coverRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer hover:border-[#84cc16] transition-all">
-                                            <input type="file" className="hidden" ref={coverRef} onChange={e => setEmbedCover(e.target.files[0])} accept="image/*" />
-                                            {embedCover ? <span className="text-[#84cc16] text-xs font-bold">{embedCover.name}</span> : <span className="text-neutral-700 text-xs font-bold">PILIH COVER IMAGE</span>}
+                                    /* MODE EMBED [cite: 48] */
+                                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="grid md:grid-cols-2 gap-10">
+                                            <div className="space-y-6">
+                                                <div className="group">
+                                                    <label className="text-[10px] text-neutral-500 uppercase font-black mb-3 block tracking-widest">
+                                                        COVER IMAGE [cite: 51]
+                                                    </label>
+                                                    <div 
+                                                        onClick={() => coverRef.current.click()} 
+                                                        className="border-2 border-dashed border-neutral-800 h-48 flex flex-col items-center justify-center cursor-pointer hover:lime-border hover:bg-[#84cc16]/5 transition-all"
+                                                    >
+                                                        <input 
+                                                            type="file" 
+                                                            className="hidden" 
+                                                            ref={coverRef} 
+                                                            onChange={e => setEmbedCover(e.target.files[0])} 
+                                                            accept="image/*" 
+                                                        />
+                                                        {embedCover ? (
+                                                            <div className="text-center p-4">
+                                                                <span className="lime-text text-xs font-bold block truncate max-w-[150px]">{embedCover.name}</span>
+                                                                <span className="text-[9px] text-neutral-600">{(embedCover.size / 1024).toFixed(1)} KB</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center space-y-1">
+                                                                <span className="text-neutral-700 text-xs font-bold block uppercase tracking-tighter">Select Source</span>
+                                                                <span className="text-[8px] text-neutral-800 font-mono">JPG/PNG/WEBP</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-[10px] text-neutral-500 uppercase font-black mb-3 block tracking-widest">
+                                                        SECRET MESSAGE [cite: 58]
+                                                    </label>
+                                                    <textarea 
+                                                        value={secretText} 
+                                                        onChange={e => setSecretText(e.target.value)} 
+                                                        placeholder="ENTER PROTOCOL DATA..." 
+                                                        className="w-full h-32 bg-black/40 border border-neutral-800 p-4 text-xs outline-none focus:lime-border lime-text placeholder:text-neutral-800 font-mono resize-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col justify-end">
+                                                <div className="mb-6 p-6 bg-black/20 border border-neutral-900 rounded space-y-4">
+                                                    <p className="text-[9px] text-neutral-600 font-mono leading-relaxed">
+                                                        Sistem menggunakan metode EOF Append. Data rahasia akan disisipkan setelah byte terakhir gambar asli. [cite: 9]
+                                                    </p>
+                                                    <div className="h-1 w-full bg-neutral-900">
+                                                        <div className={`h-full lime-bg transition-all duration-1000 ${embedCover ? 'w-full' : 'w-0'}`}></div>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={handleEmbed} 
+                                                    className="w-full py-6 bg-[#84cc16] text-black font-black text-xs uppercase tracking-[0.3em] hover:bg-[#a3e635] shadow-[0_10px_30px_rgba(132,204,22,0.2)] transition-all active:scale-95"
+                                                >
+                                                    EXECUTE EMBED [cite: 60]
+                                                </button>
+                                            </div>
                                         </div>
-                                        <textarea value={secretText} onChange={e => setSecretText(e.target.value)} placeholder="Tulis pesan rahasia di sini..." className="w-full h-24 bg-black border border-neutral-800 p-3 text-xs outline-none focus:border-[#84cc16]" />
-                                        <button onClick={handleEmbed} className="w-full py-4 bg-[#84cc16] text-black font-bold text-xs uppercase tracking-widest hover:bg-[#a3e635]">Execute Embed</button>
-                                        {embedResult && <a href={embedResult.url} download={embedResult.name} className="block text-center p-3 bg-white text-black font-bold text-xs mt-4">DOWNLOAD RESULT</a>}
+
+                                        {embedResult && (
+                                            /* [cite: 74, 75, 76, 77] */
+                                            <div className="p-8 border-2 lime-border bg-[#84cc16]/10 flex justify-between items-center animate-in zoom-in-95 duration-300">
+                                                <div>
+                                                    <p className="text-xs font-black text-white uppercase tracking-widest">PROTOCOL SUCCESSFUL</p>
+                                                    <p className="text-[9px] text-neutral-500 font-mono mt-1">EMBEDDED AT OFFSET END-OF-FILE</p>
+                                                </div>
+                                                <a 
+                                                    href={embedResult.url} 
+                                                    download={embedResult.name} 
+                                                    className="px-10 py-4 bg-white text-black font-black text-xs hover:bg-[#84cc16] transition-all tracking-[0.2em] uppercase"
+                                                >
+                                                    DOWNLOAD [cite: 77]
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
-                                    <div className="space-y-6">
-                                        <div onClick={() => extractRef.current.click()} className="border-2 border-dashed border-neutral-800 h-32 flex flex-col items-center justify-center cursor-pointer hover:border-[#84cc16] transition-all">
-                                            <input type="file" className="hidden" ref={extractRef} onChange={e => setExtractSource(e.target.files[0])} />
-                                            {extractSource ? <span className="text-[#84cc16] text-xs font-bold">{extractSource.name}</span> : <span className="text-neutral-700 text-xs font-bold">PILIH STEGO IMAGE</span>}
+                                    /* MODE EXTRACT [cite: 79] */
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div 
+                                            onClick={() => extractRef.current.click()} 
+                                            className="border-2 border-dashed border-neutral-800 h-80 flex flex-col items-center justify-center cursor-pointer hover:lime-border hover:bg-[#84cc16]/5 transition-all group"
+                                        >
+                                            <input 
+                                                type="file" 
+                                                className="hidden" 
+                                                ref={extractRef} 
+                                                onChange={e => setExtractSource(e.target.files[0])} 
+                                            />
+                                            {extractSource ? (
+                                                <div className="text-center space-y-2">
+                                                    <span className="lime-text text-xl font-black block tracking-widest uppercase">{extractSource.name}</span>
+                                                    <span className="text-[10px] text-neutral-600 font-mono uppercase">READY FOR DECRYPTION</span>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center space-y-3">
+                                                    <div className="text-neutral-800 text-6xl font-black opacity-20 uppercase">DROP</div>
+                                                    <p className="text-xs font-black text-neutral-700 uppercase tracking-widest">Select Stego Image [cite: 81, 82]</p>
+                                                </div>
+                                            )}
                                         </div>
-                                        <button onClick={handleExtract} className="w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest hover:bg-[#84cc16]">Extract & Decrypt</button>
+
+                                        <button 
+                                            onClick={handleExtract} 
+                                            className="w-full py-6 bg-white text-black font-black text-xs uppercase tracking-[0.3em] hover:bg-[#84cc16] transition-all active:scale-95 shadow-[0_10px_30px_rgba(255,255,255,0.05)]"
+                                        >
+                                            DECRYPT & EXTRACT [cite: 85]
+                                        </button>
+
                                         {extractResult && (
-                                            <div className="p-4 bg-black border border-neutral-800 mt-6">
-                                                <p className="text-[#84cc16] text-[10px] font-bold mb-2 uppercase tracking-widest">Secret Found:</p>
-                                                <p className="text-xs text-neutral-400 mb-4 font-mono leading-relaxed">{extractResult.preview}</p>
-                                                <a href={extractResult.secret} download={extractResult.filename} className="text-[10px] font-bold underline uppercase text-white">Download Hidden File</a>
+                                            /* [cite: 92, 93, 94, 101] */
+                                            <div className="grid md:grid-cols-2 gap-8 animate-in zoom-in-95 duration-300">
+                                                <div className="bento-card p-8 space-y-4">
+                                                    <p className="text-[10px] lime-text font-black tracking-widest uppercase">SECRET_CONTENT:</p>
+                                                    <div className="bg-black/40 border border-neutral-900 p-6 custom-scrollbar overflow-y-auto max-h-48">
+                                                        <p className="text-xs text-neutral-400 font-mono leading-relaxed whitespace-pre-wrap italic">
+                                                            {extractResult.preview || "No text preview available."}
+                                                        </p>
+                                                    </div>
+                                                    <a 
+                                                        href={extractResult.secret} 
+                                                        download={extractResult.filename} 
+                                                        className="block w-full py-3 border border-neutral-800 text-[10px] text-center font-bold text-neutral-500 hover:text-white hover:lime-border uppercase tracking-widest transition-all"
+                                                    >
+                                                        Download Data Content [cite: 97]
+                                                    </a>
+                                                </div>
+
+                                                <div className="bento-card p-8 bg-neutral-900/20">
+                                                    <p className="text-[10px] text-neutral-600 font-black mb-4 tracking-widest uppercase italic">RAW_METADATA:</p>
+                                                    <pre className="text-[9px] text-neutral-700 font-mono whitespace-pre-wrap leading-tight bg-black/20 p-4 border border-neutral-900">
+                                                        {JSON.stringify(extractResult.rawMeta, null, 2)}
+                                                    </pre>
+                                                    <div className="mt-4 pt-4 border-t border-neutral-900">
+                                                        <a 
+                                                            href={extractResult.original} 
+                                                            download={`clean_${extractSource.name}`} 
+                                                            className="text-[9px] text-neutral-600 hover:lime-text transition-colors font-bold uppercase tracking-widest"
+                                                        >
+                                                            &gt; Download Clean Image [cite: 99]
+                                                        </a>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </main>
                         </div>
+
+                        <footer className="text-center py-12 text-[10px] text-neutral-800 font-mono tracking-[0.6em] uppercase select-none">
+                            &copy; 2026 NYETAK PROTOCOL // SECURED BY BENTO ENGINE
+                        </footer>
                     </div>
                 </div>
             );
