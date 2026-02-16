@@ -11,158 +11,71 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'JetBrains Mono', monospace; }
+        /* Sesuai Spesifikasi PRD 2.1 [cite: 16, 17, 21] */
+        body { font-family: 'JetBrains Mono', monospace; background-color: #000000; }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #000; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #262626; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #84cc16; }
     </style>
 </head>
-<body class="bg-black text-neutral-300">
+<body class="text-neutral-300">
     <div id="root"></div>
 
     <script type="text/babel">
-        // Mengambil icon dari library Lucide
-        const { 
-          Zap, Unlock, Image: ImageIcon, FileText, Upload, Download, 
-          Cpu, AlertTriangle, CheckCircle, ShieldCheck, ChevronRight, Terminal 
-        } = lucide;
-
-        const STEG_MARKER = "EOFSTEG1"; // Marker dari PRD [cite: 115]
+        const { Zap, Unlock, Image: ImageIcon, Upload, Cpu, AlertTriangle } = lucide;
+        const STEG_MARKER = "EOFSTEG1"; // [cite: 115]
 
         const App = () => {
-          const [activeTab, setActiveTab] = React.useState('embed');
-          const [status, setStatus] = React.useState('WAITING INPUT...');
-          const [error, setError] = React.useState(null);
-          const [isProcessing, setIsProcessing] = React.useState(false);
-          
-          const [embedCover, setEmbedCover] = React.useState(null);
-          const [secretType, setSecretType] = React.useState('text');
-          const [secretFile, setSecretFile] = React.useState(null);
-          const [secretText, setSecretText] = React.useState('');
-          const [embedResult, setEmbedResult] = React.useState(null);
+            const [activeTab, setActiveTab] = React.useState('embed');
+            const [embedCover, setEmbedCover] = React.useState(null);
+            const coverInputRef = React.useRef(null);
 
-          const [extractSource, setExtractSource] = React.useState(null);
-          const [extractResult, setExtractResult] = React.useState(null);
+            return (
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-5xl mx-auto space-y-6">
+                        {/* Header Bento [cite: 24, 27, 29] */}
+                        <header className="p-6 bg-neutral-900/50 border-l-4 border-[#84cc16] flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tighter text-[#84cc16]">NYETAK</h1>
+                                <p className="text-[10px] text-neutral-500 tracking-[0.2em]">SECURE DATA EMBEDDING PROTOCOL</p>
+                            </div>
+                            <Cpu className="text-neutral-700 w-10 h-10" />
+                        </header>
 
-          const coverInputRef = React.useRef(null);
-          const secretFileInputRef = React.useRef(null);
-          const extractInputRef = React.useRef(null);
+                        <div className="grid md:grid-cols-12 gap-6">
+                            {/* Sidebar Nav [cite: 32, 35] */}
+                            <nav className="md:col-span-3 flex flex-col gap-2">
+                                <button onClick={() => setActiveTab('embed')} 
+                                    className={`p-4 border ${activeTab === 'embed' ? 'border-[#84cc16] bg-[#84cc16]/5' : 'border-neutral-800'}`}>
+                                    EMBED
+                                </button>
+                                <button onClick={() => setActiveTab('extract')} 
+                                    className={`p-4 border ${activeTab === 'extract' ? 'border-[#84cc16] bg-[#84cc16]/5' : 'border-neutral-800'}`}>
+                                    EXTRACT
+                                </button>
+                            </nav>
 
-          // Logika Embed sesuai PRD 3.1 [cite: 48, 63]
-          const executeEmbed = async () => {
-            setError(null);
-            try {
-              if (!embedCover) throw new Error("Missing cover image."); 
-              setIsProcessing(true);
-              const coverUint8 = new Uint8Array(await embedCover.arrayBuffer());
-
-              let secretUint8, filename, mimeType;
-              if (secretType === 'text') {
-                secretUint8 = new TextEncoder().encode(secretText);
-                filename = "secret_message.txt";
-                mimeType = "text/plain";
-              } else {
-                secretUint8 = new Uint8Array(await secretFile.arrayBuffer());
-                filename = secretFile.name;
-                mimeType = secretFile.type;
-              }
-
-              // Metadata sesuai PRD [cite: 66, 73]
-              const metadata = { imageSize: coverUint8.length, secretFilename: filename, mimeType, timestamp: new Date().toISOString() };
-              const metadataUint8 = new TextEncoder().encode(JSON.stringify(metadata));
-              const markerUint8 = new TextEncoder().encode(STEG_MARKER);
-
-              const combined = new Uint8Array(coverUint8.length + secretUint8.length + metadataUint8.length + markerUint8.length);
-              combined.set(coverUint8, 0);
-              combined.set(secretUint8, coverUint8.length);
-              combined.set(metadataUint8, coverUint8.length + secretUint8.length);
-              combined.set(markerUint8, coverUint8.length + secretUint8.length + metadataUint8.length);
-
-              setEmbedResult({ url: URL.createObjectURL(new Blob([combined])), name: `NYETAK_${embedCover.name}`, size: combined.length });
-            } catch (err) { setError({ message: err.message }); } finally { setIsProcessing(false); }
-          };
-
-          // Logika Extract sesuai PRD 3.2 [cite: 79, 87]
-          const executeExtract = async () => {
-            setError(null);
-            try {
-              if (!extractSource) throw new Error("No source file selected.");
-              setIsProcessing(true);
-              const uint8 = new Uint8Array(await extractSource.arrayBuffer());
-              const decoder = new TextDecoder();
-
-              if (decoder.decode(uint8.slice(-STEG_MARKER.length)) !== STEG_MARKER) throw new Error("Invalid marker.");
-
-              // Scan metadata sesuai PRD [cite: 89]
-              let metadata = null;
-              for (let i = uint8.length - STEG_MARKER.length - 1; i > uint8.length - 5120; i--) {
-                if (uint8[i] === 123) {
-                  try {
-                    const parsed = JSON.parse(decoder.decode(uint8.slice(i, uint8.length - STEG_MARKER.length)));
-                    if (parsed.imageSize) { metadata = parsed; break; }
-                  } catch (e) {}
-                }
-              }
-
-              if (!metadata) throw new Error("Metadata not found.");
-              const secretUint8 = uint8.slice(metadata.imageSize, uint8.length - STEG_MARKER.length - JSON.stringify(metadata).length);
-              
-              setExtractResult({
-                originalUrl: URL.createObjectURL(new Blob([uint8.slice(0, metadata.imageSize)])),
-                secretUrl: URL.createObjectURL(new Blob([secretUint8])),
-                secretFilename: metadata.secretFilename,
-                secretPreview: metadata.mimeType.startsWith('text/') ? decoder.decode(secretUint8) : null
-              });
-            } catch (err) { setError({ message: err.message }); } finally { setIsProcessing(false); }
-          };
-
-          return (
-            <div className="min-h-screen bg-black p-4 md:p-8">
-              <div className="max-w-5xl mx-auto space-y-6">
-                {/* Header Bento Style [cite: 24] */}
-                <header className="p-6 bg-neutral-900 border-l-4 border-lime-500 flex justify-between items-center">
-                  <h1 className="text-2xl font-bold text-lime-500">NYETAK <span className="text-neutral-500">// steganography</span></h1>
-                  <Cpu className="text-neutral-700" />
-                </header>
-
-                <div className="grid md:grid-cols-12 gap-6">
-                  <nav className="md:col-span-3 flex flex-col gap-2">
-                    <button onClick={() => setActiveTab('embed')} className={`p-4 border ${activeTab === 'embed' ? 'border-lime-500 bg-lime-500/10' : 'border-neutral-800'}`}>EMBED</button>
-                    <button onClick={() => setActiveTab('extract')} className={`p-4 border ${activeTab === 'extract' ? 'border-lime-500 bg-lime-500/10' : 'border-neutral-800'}`}>EXTRACT</button>
-                  </nav>
-
-                  <main className="md:col-span-9 bg-neutral-900/50 border border-neutral-800 p-8">
-                    {error && <div className="text-red-500 mb-4 font-bold uppercase">&gt; ERROR: {error.message}</div>}
-                    
-                    {activeTab === 'embed' ? (
-                      <div className="space-y-6">
-                        <div onClick={() => coverInputRef.current.click()} className="border-2 border-dashed border-neutral-700 h-40 flex items-center justify-center cursor-pointer">
-                          <input type="file" className="hidden" ref={coverInputRef} onChange={e => setEmbedCover(e.target.files[0])} />
-                          {embedCover ? embedCover.name : "Upload Cover Image"}
+                            {/* Workspace [cite: 43, 48] */}
+                            <main className="md:col-span-9 bg-neutral-900/40 border border-neutral-800 p-8 min-h-[400px]">
+                                <div className="space-y-6">
+                                    <label className="text-[10px] text-neutral-500 uppercase font-bold">Cover Image [cite: 51]</label>
+                                    <div onClick={() => coverInputRef.current.click()} 
+                                        className="border-2 border-dashed border-neutral-700 h-48 flex flex-col items-center justify-center cursor-pointer hover:border-[#84cc16] transition-colors">
+                                        <input type="file" className="hidden" ref={coverInputRef} onChange={e => setEmbedCover(e.target.files[0])} />
+                                        {embedCover ? (
+                                            <span className="text-[#84cc16] font-bold">{embedCover.name}</span>
+                                        ) : (
+                                            <Upload className="text-neutral-700 w-12 h-12" />
+                                        )}
+                                    </div>
+                                    <button className="w-full py-4 bg-[#84cc16] text-black font-bold uppercase tracking-widest">
+                                        Execute Process [cite: 60]
+                                    </button>
+                                </div>
+                            </main>
                         </div>
-                        <button onClick={executeEmbed} className="w-full py-4 bg-lime-500 text-black font-bold uppercase tracking-widest">Execute Embed</button>
-                        {embedResult && <a href={embedResult.url} download={embedResult.name} className="block text-center p-4 bg-white text-black font-bold">DOWNLOAD RESULT</a>}
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        <div onClick={() => extractInputRef.current.click()} className="border-2 border-dashed border-neutral-700 h-40 flex items-center justify-center cursor-pointer">
-                          <input type="file" className="hidden" ref={extractInputRef} onChange={e => setExtractSource(e.target.files[0])} />
-                          {extractSource ? extractSource.name : "Drop Stego Image"}
-                        </div>
-                        <button onClick={executeExtract} className="w-full py-4 bg-white text-black font-bold uppercase tracking-widest">Extract Data</button>
-                        {extractResult && (
-                          <div className="p-4 bg-black border border-neutral-800 space-y-4">
-                            <p className="text-lime-500 font-bold">DATA FOUND: {extractResult.secretFilename}</p>
-                            <a href={extractResult.secretUrl} download={extractResult.secretFilename} className="text-sm underline">Download Hidden Data</a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </main>
+                    </div>
                 </div>
-              </div>
-            </div>
-          );
+            );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
